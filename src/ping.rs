@@ -12,14 +12,20 @@ const TOKEN_SIZE: usize = 24;
 const ECHO_REQUEST_BUFFER_SIZE: usize = ICMP_HEADER_SIZE + TOKEN_SIZE;
 type Token = [u8; TOKEN_SIZE];
 
-pub fn ping(
+pub struct PingSocket {
+    buffer: [u8; ECHO_REQUEST_BUFFER_SIZE],
+    addr: SocketAddr,
+    socket: Socket,
+}
+
+pub fn open_socket(
     addr: IpAddr,
     timeout: Option<Duration>,
     ttl: Option<u32>,
     ident: Option<u16>,
     seq_cnt: Option<u16>,
     payload: Option<&Token>,
-) -> Result<(), Error> {
+) -> Result<PingSocket, Error> {
     let timeout = match timeout {
         Some(timeout) => Some(timeout),
         None => Some(Duration::from_secs(4)),
@@ -36,7 +42,7 @@ pub fn ping(
         payload: payload.unwrap_or(default_payload),
     };
 
-    let mut socket = if dest.is_ipv4() {
+    let socket = if dest.is_ipv4() {
         if request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
             return Err(Error::InternalError.into());
         }
@@ -56,17 +62,27 @@ pub fn ping(
 
     socket.set_write_timeout(timeout)?;
 
-    socket.send_to(&mut buffer, &dest.into())?;
-
     socket.set_read_timeout(timeout)?;
 
-    let mut buffer: [u8; 2048] = [0; 2048];
-    socket.read(&mut buffer)?;
+    Ok(PingSocket {
+        buffer,
+        addr: dest,
+        socket,
+    })
+}
 
-    let _reply = if dest.is_ipv4() {
+pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
+    socket
+        .socket
+        .send_to(&mut socket.buffer, &socket.addr.into())?;
+
+    let mut buffer: [u8; 2048] = [0; 2048];
+    socket.socket.read(&mut buffer)?;
+
+    let _reply = if socket.addr.is_ipv4() {
         let ipv4_packet = match IpV4Packet::decode(&buffer) {
             Ok(packet) => packet,
-            Err(_) => return Err(Error::InternalError.into()),
+            Err(_) => return Err(Error::InternalError),
         };
         match EchoReply::decode::<IcmpV4>(ipv4_packet.data) {
             Ok(reply) => reply,
@@ -79,5 +95,5 @@ pub fn ping(
         }
     };
 
-    return Ok(());
+    Ok(())
 }
