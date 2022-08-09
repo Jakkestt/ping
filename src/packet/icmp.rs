@@ -31,8 +31,7 @@ impl Proto for IcmpV4 {
 impl Proto for IcmpV6 {
     const ECHO_REQUEST_TYPE: u8 = 128;
     const ECHO_REQUEST_CODE: u8 = 0;
-    const ECHO_REPLY_TYPE: u8 = 129;
-    const ECHO_REPLY_CODE: u8 = 0;
+    const ECHO_REPLY_TYPE: u8 = 129; const ECHO_REPLY_CODE: u8 = 0;
 }
 
 pub struct EchoRequest<'a> {
@@ -51,7 +50,7 @@ impl<'a> EchoRequest<'a> {
         buffer[6] = (self.seq_cnt >> 8) as u8;
         buffer[7] = self.seq_cnt as u8;
 
-        if let Err(_) = (&mut buffer[8..]).write(self.payload) {
+        if (&mut buffer[8..]).write(self.payload).is_err() {
             return Err(Error::InvalidSize);
         }
 
@@ -74,7 +73,9 @@ impl<'a> EchoReply<'a> {
 
         let type_ = buffer[0];
         let code = buffer[1];
-        if type_ != P::ECHO_REPLY_TYPE && code != P::ECHO_REPLY_CODE {
+        println!("{} {}", type_, code);
+        println!("{} {}", P::ECHO_REPLY_TYPE, P::ECHO_REPLY_CODE);
+        if type_ != P::ECHO_REPLY_TYPE || code != P::ECHO_REPLY_CODE {
             return Err(Error::InvalidPacket);
         }
 

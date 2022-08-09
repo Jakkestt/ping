@@ -37,19 +37,19 @@ pub fn open_socket(
     let default_payload: &Token = &random();
 
     let request = EchoRequest {
-        ident: ident.unwrap_or(random()),
+        ident: ident.unwrap_or_else(random),
         seq_cnt: seq_cnt.unwrap_or(1),
         payload: payload.unwrap_or(default_payload),
     };
 
     let socket = if dest.is_ipv4() {
         if request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalError.into());
+            return Err(Error::InternalErr);
         }
         Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?
     } else {
         if request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalError.into());
+            return Err(Error::InternalErr);
         }
         Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?
     };
@@ -64,6 +64,8 @@ pub fn open_socket(
 
     socket.set_read_timeout(timeout)?;
 
+    println!("{:?}", buffer);
+
     Ok(PingSocket {
         buffer,
         addr: dest,
@@ -72,26 +74,27 @@ pub fn open_socket(
 }
 
 pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
-    socket
-        .socket
-        .send_to(&mut socket.buffer, &socket.addr.into())?;
+    let bytes = socket.socket.send_to(&socket.buffer, &socket.addr.into())?;
+    println!("Pinged {bytes} bytes");
 
     let mut buffer: [u8; 2048] = [0; 2048];
-    socket.socket.read(&mut buffer)?;
+    Read::read(&mut socket.socket, &mut buffer)?;
+
+    println!("{:?}", buffer);
 
     let _reply = if socket.addr.is_ipv4() {
         let ipv4_packet = match IpV4Packet::decode(&buffer) {
             Ok(packet) => packet,
-            Err(_) => return Err(Error::InternalError),
+            Err(_) => return Err(Error::InternalErr),
         };
         match EchoReply::decode::<IcmpV4>(ipv4_packet.data) {
             Ok(reply) => reply,
-            Err(_) => return Err(Error::InternalError.into()),
+            Err(_) => return Err(Error::InternalErr),
         }
     } else {
         match EchoReply::decode::<IcmpV6>(&buffer) {
             Ok(reply) => reply,
-            Err(_) => return Err(Error::InternalError.into()),
+            Err(_) => return Err(Error::InternalErr),
         }
     };
 

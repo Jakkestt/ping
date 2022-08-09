@@ -5,11 +5,11 @@ pub enum Error {
     #[error("invalid procotol")]
     InvalidProtocol,
     #[error("internal error")]
-    InternalError,
+    InternalErr,
     #[error("io error: {error}")]
-    IoError {
+    IoErr {
         #[from]
         #[source]
-        error: ::std::io::Error
-    }
+        error: ::std::io::Error,
+    },
 }
