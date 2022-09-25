@@ -1,7 +1,9 @@
+use rand::random;
 use std::io::Write;
 use thiserror::Error;
 
 pub const HEADER_SIZE: usize = 8;
+type Token = [u8; 24];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -31,17 +33,17 @@ impl Proto for IcmpV4 {
 impl Proto for IcmpV6 {
     const ECHO_REQUEST_TYPE: u8 = 128;
     const ECHO_REQUEST_CODE: u8 = 0;
-    const ECHO_REPLY_TYPE: u8 = 129; const ECHO_REPLY_CODE: u8 = 0;
+    const ECHO_REPLY_TYPE: u8 = 129;
+    const ECHO_REPLY_CODE: u8 = 0;
 }
 
-pub struct EchoRequest<'a> {
+pub struct EchoRequest {
     pub ident: u16,
     pub seq_cnt: u16,
-    pub payload: &'a [u8],
 }
 
-impl<'a> EchoRequest<'a> {
-    pub fn encode<P: Proto>(&self, buffer: &mut [u8]) -> Result<(), Error> {
+impl EchoRequest {
+    pub fn encode<P: Proto>(&mut self, buffer: &mut [u8]) -> Result<(), Error> {
         buffer[0] = P::ECHO_REQUEST_TYPE;
         buffer[1] = P::ECHO_REQUEST_CODE;
 
@@ -49,12 +51,14 @@ impl<'a> EchoRequest<'a> {
         buffer[5] = self.ident as u8;
         buffer[6] = (self.seq_cnt >> 8) as u8;
         buffer[7] = self.seq_cnt as u8;
+        let payload: &Token = &random();
 
-        if (&mut buffer[8..]).write(self.payload).is_err() {
+        if (&mut buffer[8..]).write(payload).is_err() {
             return Err(Error::InvalidSize);
         }
 
         write_checksum(buffer);
+        self.seq_cnt += 1;
         Ok(())
     }
 }

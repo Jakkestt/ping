@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
@@ -10,10 +10,9 @@ use crate::packet::{EchoReply, EchoRequest, IcmpV4, IcmpV6, IpV4Packet, ICMP_HEA
 
 const TOKEN_SIZE: usize = 24;
 const ECHO_REQUEST_BUFFER_SIZE: usize = ICMP_HEADER_SIZE + TOKEN_SIZE;
-type Token = [u8; TOKEN_SIZE];
 
 pub struct PingSocket {
-    buffer: [u8; ECHO_REQUEST_BUFFER_SIZE],
+    request: EchoRequest,
     addr: SocketAddr,
     socket: Socket,
 }
@@ -23,8 +22,6 @@ pub fn open_socket(
     timeout: Option<Duration>,
     ttl: Option<u32>,
     ident: Option<u16>,
-    seq_cnt: Option<u16>,
-    payload: Option<&Token>,
 ) -> Result<PingSocket, Error> {
     let timeout = match timeout {
         Some(timeout) => Some(timeout),
@@ -32,25 +29,15 @@ pub fn open_socket(
     };
 
     let dest = SocketAddr::new(addr, 0);
-    let mut buffer = [0; ECHO_REQUEST_BUFFER_SIZE];
-
-    let default_payload: &Token = &random();
 
     let request = EchoRequest {
         ident: ident.unwrap_or_else(random),
-        seq_cnt: seq_cnt.unwrap_or(1),
-        payload: payload.unwrap_or(default_payload),
+        seq_cnt: 0,
     };
 
     let socket = if dest.is_ipv4() {
-        if request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalErr);
-        }
         Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?
     } else {
-        if request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalErr);
-        }
         Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?
     };
 
@@ -64,17 +51,29 @@ pub fn open_socket(
 
     socket.set_read_timeout(timeout)?;
 
-    println!("{:?}", buffer);
-
     Ok(PingSocket {
-        buffer,
+        request,
         addr: dest,
         socket,
     })
 }
 
 pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
-    let bytes = socket.socket.send_to(&socket.buffer, &socket.addr.into())?;
+    let mut buffer = [0; ECHO_REQUEST_BUFFER_SIZE];
+    if socket.addr.is_ipv4() {
+        if socket.request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
+            return Err(Error::InternalErr.into());
+        }
+    } else {
+        if socket.request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
+            return Err(Error::InternalErr.into());
+        }
+    }
+
+    println!("{:?}", buffer);
+
+    let bytes = socket.socket.send_to(&buffer, &socket.addr.into())?;
+    socket.socket.flush()?;
     println!("Pinged {bytes} bytes");
 
     let mut buffer: [u8; 2048] = [0; 2048];
