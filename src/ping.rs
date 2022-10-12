@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
@@ -70,16 +70,9 @@ pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
         }
     }
 
-    println!("{:?}", buffer);
-
-    let bytes = socket.socket.send_to(&buffer, &socket.addr.into())?;
-    socket.socket.flush()?;
-    println!("Pinged {bytes} bytes");
-
+    socket.socket.send_to(&buffer, &socket.addr.into())?;
     let mut buffer: [u8; 2048] = [0; 2048];
     Read::read(&mut socket.socket, &mut buffer)?;
-
-    println!("{:?}", buffer);
 
     let _reply = if socket.addr.is_ipv4() {
         let ipv4_packet = match IpV4Packet::decode(&buffer) {
