@@ -12,4 +12,8 @@ pub enum Error {
         #[source]
         error: ::std::io::Error,
     },
+    #[error("encoding error")]
+    EncodingErr,
+    #[error("decoding error")]
+    DecodingErr,
 }

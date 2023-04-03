@@ -62,11 +62,11 @@ pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
     let mut buffer = [0; ECHO_REQUEST_BUFFER_SIZE];
     if socket.addr.is_ipv4() {
         if socket.request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalErr.into());
+            return Err(Error::EncodingErr.into());
         }
     } else {
         if socket.request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
-            return Err(Error::InternalErr.into());
+            return Err(Error::EncodingErr.into());
         }
     }
 
@@ -77,16 +77,16 @@ pub fn ping(socket: &mut PingSocket) -> Result<(), Error> {
     let _reply = if socket.addr.is_ipv4() {
         let ipv4_packet = match IpV4Packet::decode(&buffer) {
             Ok(packet) => packet,
-            Err(_) => return Err(Error::InternalErr),
+            Err(_) => return Err(Error::DecodingErr),
         };
         match EchoReply::decode::<IcmpV4>(ipv4_packet.data) {
             Ok(reply) => reply,
-            Err(_) => return Err(Error::InternalErr),
+            Err(_) => return Err(Error::DecodingErr),
         }
     } else {
         match EchoReply::decode::<IcmpV6>(&buffer) {
             Ok(reply) => reply,
-            Err(_) => return Err(Error::InternalErr),
+            Err(_) => return Err(Error::DecodingErr),
         }
     };
 
